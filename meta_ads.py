@@ -1,40 +1,44 @@
 import os
+import requests
 from dotenv import load_dotenv
-from facebook_business.api import FacebookAdsApi
-from facebook_business.adobjects.adaccount import AdAccount
-from facebook_business.adobjects.user import User
 
 load_dotenv()
 
 ACCESS_TOKEN = os.environ["META_ADS_ACCESS_TOKEN"]
+BASE = "https://graph.facebook.com/v19.0"
+
+
+def get(path, **params):
+    params["access_token"] = ACCESS_TOKEN
+    r = requests.get(f"{BASE}{path}", params=params)
+    r.raise_for_status()
+    return r.json()
 
 
 def connect():
-    FacebookAdsApi.init(access_token=ACCESS_TOKEN)
-    me = User(fbid="me")
-    info = me.api_get(fields=["name", "id"])
-    print(f"Connected as: {info['name']} (ID: {info['id']})")
-    return info
+    data = get("/me", fields="name,id")
+    print(f"Connected as: {data['name']} (ID: {data['id']})")
+    return data
 
 
 def list_ad_accounts():
-    FacebookAdsApi.init(access_token=ACCESS_TOKEN)
-    me = User(fbid="me")
-    accounts = me.get_ad_accounts(fields=[
-        AdAccount.Field.name,
-        AdAccount.Field.account_id,
-        AdAccount.Field.account_status,
-        AdAccount.Field.currency,
-        AdAccount.Field.timezone_name,
-    ])
-    for account in accounts:
-        status_map = {1: "ACTIVE", 2: "DISABLED", 3: "UNSETTLED", 7: "PENDING_RISK_REVIEW", 9: "IN_GRACE_PERIOD", 100: "PENDING_CLOSURE", 101: "CLOSED", 201: "ANY_ACTIVE", 202: "ANY_CLOSED"}
-        status = status_map.get(account.get(AdAccount.Field.account_status), "UNKNOWN")
-        print(f"  Account: {account[AdAccount.Field.name]}")
-        print(f"    ID:       {account[AdAccount.Field.account_id]}")
+    data = get("/me/adaccounts", fields="name,account_id,account_status,currency,timezone_name")
+    status_map = {
+        1: "ACTIVE", 2: "DISABLED", 3: "UNSETTLED",
+        7: "PENDING_RISK_REVIEW", 9: "IN_GRACE_PERIOD",
+        100: "PENDING_CLOSURE", 101: "CLOSED",
+    }
+    accounts = data.get("data", [])
+    if not accounts:
+        print("No ad accounts found.")
+        return []
+    for acc in accounts:
+        status = status_map.get(acc.get("account_status"), "UNKNOWN")
+        print(f"  {acc.get('name')}")
+        print(f"    ID:       {acc.get('account_id')}")
         print(f"    Status:   {status}")
-        print(f"    Currency: {account.get(AdAccount.Field.currency)}")
-        print(f"    Timezone: {account.get(AdAccount.Field.timezone_name)}")
+        print(f"    Currency: {acc.get('currency')}")
+        print(f"    Timezone: {acc.get('timezone_name')}")
         print()
     return accounts
 
